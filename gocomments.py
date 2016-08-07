@@ -9,11 +9,17 @@ class PreSaveListener(sublime_plugin.EventListener):
 	def on_post_save(self, view):
 		view.run_command("gocomments")
 
+# TWO BUGS FOUND:
+# If you comment out an entire block (so code, not comments), and then save ...they all get chopped up. YIkes, what to do?
+# In line comments are getting split , ie: var x // here we define x blah blah.
+# --> those should not be split no matter the length... regex must be off
+
 class GocommentsCommand(sublime_plugin.TextCommand):
 	def run(self, edit):
 
 		offset = 0
-		for rgn in self.view.find_all("[ \t]*[/]{2}.*"):
+		rgns = self.view.find_all("[ \t]*[/]{2}.*")
+		for i, rgn in enumerate(rgns):
 			if rgn.size() > (75):
 				# print(rgn)
 				start = rgn.a + offset
@@ -33,6 +39,10 @@ class GocommentsCommand(sublime_plugin.TextCommand):
 				if adj >= rgn.size():
 					continue
 
+				# If the new comment line would be less than 25 characters, don't bother.
+				if end - (start+adj) < 25:
+					continue
+
 				# Determine the indentation.
 				match = re.search(r'^([ \t]+)', self.view.substr(comment))
 				if match:
@@ -40,6 +50,18 @@ class GocommentsCommand(sublime_plugin.TextCommand):
 					offset += match.end()
 				else:
 					indent = ""
+
+				# Determine punctuation.
+				# can only do this at the very end of a wrapped and --checked against following regions-- string
+				# to make sure it's not just a long multi line comment that was partially self wrapped
+				# [\.\?\!;]*$
+
+				# Check following regions...
+				# * need to check if rgns[i+1] exists first
+				if rgns[i+1].a == (rgn.b + 1):
+					print(self.view.substr(comment))
+					print("here")
+					# [ \t]*[/]{2}[\s]* ... need the opposite of this
 
 				self.view.replace(edit, comment, self.view.substr(sublime.Region(start, start+adj)) + "\n" + indent + "// " + self.view.substr(sublime.Region(start+adj, end)))
 
